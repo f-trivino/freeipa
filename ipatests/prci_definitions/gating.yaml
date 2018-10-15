@@ -12,6 +12,8 @@ topologies:
     cpu: 4
     memory: 6700
 
+
+
 jobs:
   fedora-28/build:
     requires: []
