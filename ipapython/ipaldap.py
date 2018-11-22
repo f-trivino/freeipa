@@ -33,6 +33,7 @@ from urllib.parse import urlparse
 import warnings
 
 from cryptography import x509 as crypto_x509
+from cryptography.hazmat.primitives import serialization
 
 import ldap
 import ldap.sasl
@@ -43,6 +44,7 @@ import six
 # pylint: disable=ipa-forbidden-import
 from ipalib import errors, x509, _
 from ipalib.constants import LDAP_GENERALIZED_TIME_FORMAT
+from ipalib.x509 import IPACertificate
 # pylint: enable=ipa-forbidden-import
 from ipapython.ipautil import format_netloc, CIDict
 from ipapython.dn import DN
@@ -1289,6 +1291,8 @@ class LDAPClient:
             ]
             return cls.combine_filters(flts, rules)
         elif value is not None:
+            if isinstance(value, IPACertificate):
+                value = value.public_bytes(serialization.Encoding.DER)
             if isinstance(value, bytes):
                 value = binascii.hexlify(value).decode('ascii')
                 # value[-2:0] is empty string for the initial '\\'
