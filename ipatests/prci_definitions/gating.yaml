@@ -31,6 +31,7 @@ jobs:
         timeout: 1800
         topology: *build
 
+
   fedora-28/ad_tests:
     requires: [fedora-28/build]
     priority: 50
