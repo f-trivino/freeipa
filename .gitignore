@@ -28,7 +28,6 @@ Makefile.in
 *.log
 *.o
 *.trs
-*~
 version.m4
 aclocal.m4
 autom4te.cache/
@@ -49,6 +48,9 @@ test-driver
 freeipa-*.tar.gz
 .tarball_name
 .version
+
+# Emacs
+*~
 
 # Python compilation
 *.pyc
@@ -97,7 +99,7 @@ freeipa2-dev-doc
 
 !/install/ui/doc/Makefile.in
 /install/ui/node_modules/
-/install/ui/package-lock.json 
+/install/ui/package-lock.json
 # package-lock file can be commited, but it makes sense for npm packages.
 # It stores informations about changes in node_modules. For now it is not
 # very useful
