@@ -56,6 +56,9 @@ class TestReplicaPromotionLevel1(ReplicaPromotionBase):
 
         Test for ticket 6353
         """
+        # Configure firewall first
+        Firewall(self.replicas[0]).enable_services(["freeipa-ldap",
+                                                    "freeipa-ldaps"])
         expected_err = "--password and --admin-password options are " \
                        "mutually exclusive"
         result = self.replicas[0].run_command([
@@ -69,8 +72,6 @@ class TestReplicaPromotionLevel1(ReplicaPromotionBase):
             raiseonerr=False)
         assert result.returncode == 1
         assert expected_err in result.stderr_text
-        Firewall(self.replicas[0]).enable_services(["freeipa-ldap",
-                                                    "freeipa-ldaps"])
 
     @replicas_cleanup
     def test_one_command_installation(self):
@@ -79,14 +80,15 @@ class TestReplicaPromotionLevel1(ReplicaPromotionBase):
         http://www.freeipa.org/page/V4/Replica_Promotion/Test_plan
         #Test_case:_Replica_can_be_installed_using_one_command
         """
+        # Configure firewall first
+        Firewall(self.replicas[0]).enable_services(["freeipa-ldap",
+                                                    "freeipa-ldaps"])
         self.replicas[0].run_command(['ipa-replica-install', '-w',
                                      self.master.config.admin_password,
                                      '-n', self.master.domain.name,
                                      '-r', self.master.domain.realm,
                                      '--server', self.master.hostname,
                                      '-U'])
-        Firewall(self.replicas[0]).enable_services(["freeipa-ldap",
-                                                    "freeipa-ldaps"])
         # Ensure that pkinit is properly configured, test for 7566
         result = self.replicas[0].run_command(['ipa-pkinit-manage', 'status'])
         assert "PKINIT is enabled" in result.stdout_text
@@ -136,6 +138,9 @@ class TestUnprivilegedUserPermissions(IntegrationTest):
     def test_replica_promotion_by_unprivileged_user(self):
         replica = self.replicas[0]
         tasks.install_client(self.master, replica)
+        # Configure firewall first
+        Firewall(replica).enable_services(["freeipa-ldap",
+                                           "freeipa-ldaps"])
         result2 = replica.run_command(['ipa-replica-install',
                                        '-P', self.username,
                                        '-p', self.new_password,
@@ -149,14 +154,15 @@ class TestUnprivilegedUserPermissions(IntegrationTest):
         self.master.run_command(['ipa', 'group-add-member', 'admins',
                                  '--users=%s' % self.username])
 
+        # Configure firewall first
+        Firewall(self.replicas[0]).enable_services(["freeipa-ldap",
+                                                    "freeipa-ldaps"])
         self.replicas[0].run_command(['ipa-replica-install',
                                       '-P', self.username,
                                       '-p', self.new_password,
                                       '-n', self.master.domain.name,
                                       '-r', self.master.domain.realm,
                                       '-U'])
-        Firewall(self.replicas[0]).enable_services(["freeipa-ldap",
-                                                    "freeipa-ldaps"])
 
 
 class TestProhibitReplicaUninstallation(IntegrationTest):
@@ -212,6 +218,9 @@ class TestWrongClientDomain(IntegrationTest):
                             '-w', self.master.config.admin_password,
                             '--server', self.master.hostname,
                             '--force-join'])
+        # Configure firewall first
+        Firewall(client).enable_services(["freeipa-ldap",
+                                          "freeipa-ldaps"])
         result = client.run_command(['ipa-replica-install', '-U', '-w',
                                      self.master.config.dirman_password],
                                     raiseonerr=False)
@@ -230,6 +239,9 @@ class TestWrongClientDomain(IntegrationTest):
                                      '--force-join'], raiseonerr=False)
         assert(result.returncode == 0), (
             'Failed to setup client with the upcase domain name')
+        # Configure firewall first
+        Firewall(self.replicas[0]).enable_services(["freeipa-ldap",
+                                                    "freeipa-ldaps"])
         result1 = client.run_command(['ipa-replica-install', '-U', '-w',
                                       self.master.config.dirman_password],
                                      raiseonerr=False)
@@ -610,3 +622,104 @@ class TestReplicaInstallCustodia(IntegrationTest):
         tasks.install_replica(replica1, replica2, setup_ca=True)
         result = replica2.run_command(['ipactl', 'status'])
         assert 'ipa-custodia Service: RUNNING' in result.stdout_text
+
+
+def update_etc_hosts(host, ip, old_hostname, new_hostname):
+    '''Adds or update /etc/hosts
+
+    If /etc/hosts contains an entry for old_hostname, replace it with
+    new_hostname.
+    If /etc/hosts did not contain the entry, create one for new_hostname with
+    the provided ip.
+    The function makes a backup in /etc/hosts.sav
+
+    :param host the machine on which /etc/hosts needs to be update_dns_records
+    :param ip the ip address for the new record
+    :param old_hostname the hostname to replace
+    :param new_hostname the new hostname to put in /etc/hosts
+    '''
+    # Make a backup
+    host.run_command(['/usr/bin/cp',
+                      paths.HOSTS,
+                      '%s.sav' % paths.HOSTS])
+    contents = host.get_file_contents(paths.HOSTS, encoding='utf-8')
+    # If /etc/hosts already contains old_hostname, simply replace
+    pattern = r'^(.*\s){}(\s)'.format(old_hostname)
+    new_contents, mods = re.subn(pattern, r'\1{}\2'.format(new_hostname),
+                                 contents, flags=re.MULTILINE)
+    # If it didn't contain any entry for old_hostname, just add new_hostname
+    if mods == 0:
+        short = new_hostname.split(".", 1)[0]
+        new_contents = new_contents + "\n{}\t{} {}\n".format(ip,
+                                                             new_hostname,
+                                                             short)
+    host.put_file_contents(paths.HOSTS, new_contents)
+
+
+def restore_etc_hosts(host):
+    '''Restores /etc/hosts.sav into /etc/hosts
+    '''
+    host.run_command(['/usr/bin/mv',
+                      '%s.sav' % paths.HOSTS,
+                      paths.HOSTS],
+                     raiseonerr=False)
+
+
+class TestReplicaInForwardZone(IntegrationTest):
+    """
+    Pagure Reference: https://pagure.io/freeipa/issue/7369
+
+    Scenario: install a replica whose name is in a forwarded zone
+    """
+
+    forwardzone = 'forward.test'
+    num_replicas = 1
+
+    @classmethod
+    def install(cls, mh):
+        tasks.install_master(cls.master, setup_dns=True)
+
+    def test_replica_install_in_forward_zone(self):
+        master = self.master
+        replica = self.replicas[0]
+
+        # Create a forward zone on the master
+        master.run_command(['ipa', 'dnsforwardzone-add', self.forwardzone,
+                            '--skip-overlap-check',
+                            '--forwarder', master.config.dns_forwarder])
+
+        # Configure the client with a name in the forwardzone
+        r_shortname = replica.hostname.split(".", 1)[0]
+        r_new_hostname = '{}.{}'.format(r_shortname,
+                                        self.forwardzone)
+
+        # Update /etc/hosts on the master with an entry for the replica
+        # otherwise replica conncheck would fail
+        update_etc_hosts(master, replica.ip, replica.hostname,
+                         r_new_hostname)
+        # Remove the replica previous hostname from /etc/hosts
+        # and add the replica new hostname
+        # otherwise replica install will complain because
+        # hostname does not match
+        update_etc_hosts(replica, replica.ip, replica.hostname,
+                         r_new_hostname)
+
+        try:
+            # install client with a hostname in the forward zone
+            tasks.install_client(self.master, replica,
+                                 extra_args=['--hostname', r_new_hostname])
+
+            # Configure firewall first
+            Firewall(replica).enable_services(["freeipa-ldap",
+                                               "freeipa-ldaps"])
+            replica.run_command(['ipa-replica-install',
+                                 '--principal', replica.config.admin_name,
+                                 '--admin-password',
+                                 replica.config.admin_password,
+                                 '--setup-dns',
+                                 '--forwarder', master.config.dns_forwarder,
+                                 '-U'])
+        finally:
+            # Restore /etc/hosts on master and replica
+            restore_etc_hosts(master)
+            restore_etc_hosts(replica)

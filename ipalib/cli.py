@@ -49,7 +49,7 @@ import six
 from six.moves import input
 
 from ipalib.util import (
-    check_client_configuration, get_terminal_height, open_in_pager
+    check_client_configuration, get_pager, get_terminal_height, open_in_pager
 )
 
 if six.PY3:
@@ -721,9 +721,11 @@ class help(frontend.Local):
             self.buffer.append(unicode(string))
 
         def write(self):
-            if self.buffer_length > get_terminal_height():
+            pager = get_pager()
+
+            if pager and self.buffer_length > get_terminal_height():
                 data = "\n".join(self.buffer).encode("utf-8")
-                open_in_pager(data)
+                open_in_pager(data, pager)
             else:
                 try:
                     for line in self.buffer:
@@ -1452,7 +1454,7 @@ def run(api):
         (_options, argv) = api.bootstrap_with_global_options(context='cli')
 
         try:
-            check_client_configuration()
+            check_client_configuration(env=api.env)
         except ScriptError as e:
             sys.exit(e)
 

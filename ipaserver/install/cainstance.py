@@ -72,23 +72,6 @@ from ipaserver.masters import ENABLED_SERVICE
 
 logger = logging.getLogger(__name__)
 
-# We need to reset the template because the CA uses the regular boot
-# information
-INF_TEMPLATE = """
-[General]
-FullMachineName=   $FQDN
-SuiteSpotUserID=   $USER
-SuiteSpotGroup=    $GROUP
-ServerRoot=    $SERVER_ROOT
-[slapd]
-ServerPort=   $DSPORT
-ServerIdentifier=   $SERVERID
-Suffix=   $SUFFIX
-RootDN=   cn=Directory Manager
-RootDNPwd= $PASSWORD
-ConfigFile = /usr/share/pki/ca/conf/database.ldif
-"""
-
 
 ADMIN_GROUPS = [
     'Enterprise CA Administrators',
@@ -403,6 +386,7 @@ class CAInstance(DogtagInstance):
                 self.step("creating installation admin user", self.setup_admin)
             self.step("configuring certificate server instance",
                       self.__spawn_instance)
+            self.step("reindex attributes", self.reindex_task)
             self.step("exporting Dogtag certificate store pin",
                       self.create_certstore_passwdfile)
             self.step("stopping certificate server instance to update CS.cfg",

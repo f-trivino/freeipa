@@ -37,6 +37,7 @@ import sys
 import ssl
 import termios
 import fcntl
+import shutil
 import struct
 import subprocess
 
@@ -1122,15 +1123,16 @@ def ensure_krbcanonicalname_set(ldap, entry_attrs):
     entry_attrs.update(old_entry)
 
 
-def check_client_configuration():
+def check_client_configuration(env=None):
     """
     Check if IPA client is configured on the system.
 
     Hardcode return code to avoid recursive imports
     """
-    if (not os.path.isfile(paths.IPA_DEFAULT_CONF) or
+    if ((env is not None and not os.path.isfile(env.conf_default)) or
+       (not os.path.isfile(paths.IPA_DEFAULT_CONF) or
             not os.path.isdir(paths.IPA_CLIENT_SYSRESTORE) or
-            not os.listdir(paths.IPA_CLIENT_SYSRESTORE)):
+            not os.listdir(paths.IPA_CLIENT_SYSRESTORE))):
         raise ScriptError('IPA client is not configured on this system',
                           2)  # CLIENT_NOT_CONFIGURED
 
@@ -1203,17 +1205,27 @@ def get_terminal_height(fd=1):
         return os.environ.get("LINES", 25)
 
 
-def open_in_pager(data):
+def get_pager():
+    """ Get path to a pager
+
+    :return: path to the file if it exists otherwise None
+    :rtype: str or None
+    """
+    pager = os.environ.get('PAGER', 'less')
+    return shutil.which(pager)
+
+
+def open_in_pager(data, pager):
     """
     Open text data in pager
 
     Args:
         data (bytes): data to view in pager
+        pager (str): path to the pager
 
     Returns:
         None
     """
-    pager = os.environ.get("PAGER", "less")
     pager_process = subprocess.Popen([pager], stdin=subprocess.PIPE)
 
     try:

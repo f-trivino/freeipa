@@ -186,32 +186,6 @@ def get_all_external_schema_files(root):
     return sorted(f)
 
 
-INF_TEMPLATE = """
-[General]
-FullMachineName=   $FQDN
-SuiteSpotUserID=   $USER
-SuiteSpotGroup=    $GROUP
-ServerRoot=    $SERVER_ROOT
-[slapd]
-ServerPort=   389
-ServerIdentifier=   $SERVERID
-Suffix=   $SUFFIX
-RootDN=   cn=Directory Manager
-RootDNPwd= $PASSWORD
-InstallLdifFile= /var/lib/dirsrv/boot.ldif
-inst_dir=   /var/lib/dirsrv/scripts-$SERVERID
-"""
-
-BASE_TEMPLATE = """
-dn: $SUFFIX
-objectClass: top
-objectClass: domain
-objectClass: pilotObject
-dc: $BASEDC
-info: IPA V2.0
-"""
-
-
 class DsInstance(service.Service):
     def __init__(self, realm_name=None, domain_name=None, fstore=None,
                  domainlevel=None, config_ldif=None):
@@ -551,6 +525,10 @@ class DsInstance(service.Service):
     def __create_instance(self):
         self.backup_state("serverid", self.serverid)
         self.fstore.backup_file(paths.SYSCONFIG_DIRSRV)
+
+        # workaround for https://pagure.io/389-ds-base/issue/50152
+        if 'HOME' not in os.environ:
+            os.environ['HOME'] = api.env.home
 
         # The new installer is api driven. We can pass it a log function
         # and it will use it. Because of this, we can pass verbose true,

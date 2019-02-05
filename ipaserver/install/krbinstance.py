@@ -45,6 +45,7 @@ from ipaserver.install import replication
 from ipaserver.install import ldapupdate
 
 from ipaserver.install import certs
+from ipaserver.masters import find_providing_servers
 from ipaplatform.constants import constants
 from ipaplatform.tasks import tasks
 from ipaplatform.paths import paths
@@ -77,7 +78,7 @@ def is_pkinit_enabled():
     if os.path.exists(paths.KDC_CERT):
         pkinit_request_ca = get_pkinit_request_ca()
 
-        if pkinit_request_ca != "SelfSign":
+        if pkinit_request_ca and pkinit_request_ca != "SelfSign":
             return True
 
     return False
@@ -428,10 +429,13 @@ class KrbInstance(service.Service):
             prev_helper = None
             # on the first CA-ful master without '--no-pkinit', we issue the
             # certificate by contacting Dogtag directly
+            localhost_has_ca = self.fqdn in find_providing_servers(
+                'CA', conn=self.api.Backend.ldap2, api=self.api)
             use_dogtag_submit = all(
                 [self.master_fqdn is None,
                  self.pkcs12_info is None,
-                 self.config_pkinit])
+                 self.config_pkinit,
+                 localhost_has_ca])
 
             if use_dogtag_submit:
                 ca_args = [
@@ -602,6 +606,10 @@ class KrbInstance(service.Service):
     def stop_tracking_certs(self):
         certmonger.stop_tracking(certfile=paths.KDC_CERT)
 
+    def delete_pkinit_cert(self):
+        installutils.remove_file(paths.KDC_CERT)
+        installutils.remove_file(paths.KDC_KEY)
+
     def uninstall(self):
         if self.is_configured():
             self.print_msg("Unconfiguring %s" % self.service_name)
@@ -627,8 +635,7 @@ class KrbInstance(service.Service):
         # stop tracking and remove certificates
         self.stop_tracking_certs()
         installutils.remove_file(paths.CACERT_PEM)
-        installutils.remove_file(paths.KDC_CERT)
-        installutils.remove_file(paths.KDC_KEY)
+        self.delete_pkinit_cert()
 
         if running:
             self.restart()

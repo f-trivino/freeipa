@@ -418,7 +418,7 @@ def master_authoritative_for_client_domain(master, client):
     return result.returncode == 0
 
 
-def _config_replica_resolvconf_with_master_data(master, replica):
+def config_replica_resolvconf_with_master_data(master, replica):
     """
     Configure replica /etc/resolv.conf to use master as DNS server
     """
@@ -793,8 +793,9 @@ def uninstall_master(host, ignore_topology_disconnect=True,
 
     result = host.run_command(uninstall_cmd)
     assert "Traceback" not in result.stdout_text
-    Firewall(host).disable_services(["freeipa-ldap", "freeipa-ldaps",
-                                     "freeipa-trust", "dns"])
+    if clean:
+        Firewall(host).disable_services(["freeipa-ldap", "freeipa-ldaps",
+                                         "freeipa-trust", "dns"])
 
     host.run_command(['pkidestroy', '-s', 'CA', '-i', 'pki-tomcat'],
                      raiseonerr=False)
@@ -1487,7 +1488,7 @@ def ldappasswd_user_change(user, oldpw, newpw, master):
     basedn = master.domain.basedn
 
     userdn = "uid={},{},{}".format(user, container_user, basedn)
-    master_ldap_uri = "ldap://{}".format(master.external_hostname)
+    master_ldap_uri = "ldap://{}".format(master.hostname)
 
     args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
             '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
@@ -1499,7 +1500,7 @@ def ldappasswd_sysaccount_change(user, oldpw, newpw, master):
     basedn = master.domain.basedn
 
     userdn = "uid={},{},{}".format(user, container_sysaccounts, basedn)
-    master_ldap_uri = "ldap://{}".format(master.external_hostname)
+    master_ldap_uri = "ldap://{}".format(master.hostname)
 
     args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
             '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
@@ -1596,9 +1597,19 @@ def strip_cert_header(pem):
         return pem
 
 
-def user_add(host, login):
-    host.run_command([
+def user_add(host, login, first='test', last='user', extra_args=()):
+    cmd = [
         "ipa", "user-add", login,
-        "--first", "test",
-        "--last", "user"
-    ])
+        "--first", first,
+        "--last", last
+    ]
+    cmd.extend(extra_args)
+    return host.run_command(cmd)
+
+
+def group_add(host, groupname, extra_args=()):
+    cmd = [
+        "ipa", "group-add", groupname,
+    ]
+    cmd.extend(extra_args)
+    return host.run_command(cmd)

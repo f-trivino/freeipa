@@ -51,13 +51,14 @@
 # python3-lib389
 # Fix for "Installation fails: Replica Busy"
 # https://pagure.io/389-ds-base/issue/49818
-%global ds_version 1.4.0.16-1
+%global ds_version 1.4.0.16
 
 %else
 # Fedora
 %global package_name freeipa
 %global alt_name ipa
-%global krb5_version 1.16.1
+# Fix for CVE-2018-20217
+%global krb5_version 1.16.1-24
 %global krb5_kdb_version 7.0
 # 0.7.16: https://github.com/drkjam/netaddr/issues/71
 %global python_netaddr_version 0.7.16
@@ -72,18 +73,28 @@
 # python3-lib389
 # Fix for "Installation fails: Replica Busy"
 # https://pagure.io/389-ds-base/issue/49818
-%global ds_version 1.4.0.16-1
+%global ds_version 1.4.0.16
+
+# Don't use Fedora's Python dependency generator on Fedora 30/rawhide yet.
+# Some packages don't provide new dist aliases.
+# https://docs.fedoraproject.org/en-US/packaging-guidelines/Python/
+%{?python_disable_dependency_generator}
 
 %endif  # Fedora
 
-# Require Dogtag PKI 10.6.7-3 which fixes UpdateNumberRange clone
-# installation issue; https://pagure.io/freeipa/issue/7654
+# Require Dogtag PKI 10.6.8-3 (10.6.7 was never pushed to stable)
+# 10.6.7 fixes UpdateNumberRange clone installation issue
+# https://pagure.io/freeipa/issue/7654 and empty token issue
 # and https://pagure.io/dogtagpki/issue/3073
-%global pki_version 10.6.7-3
+%global pki_version 10.6.8-3
 
-# NSS release with fix for CKA_LABEL import bug in shared SQL database.
-# https://bugzilla.redhat.com/show_bug.cgi?id=1568271
-%global nss_version 3.36.1-1.1
+# NSS release with fix for p11-kit-proxy issue, affects F28
+# https://pagure.io/freeipa/issue/7810
+%if 0%{?fedora} == 28
+%global nss_version 3.41.0-3
+%else
+%global nss_version 3.41.0-1
+%endif
 
 # One-Way Trust authenticated by trust secret
 # https://bugzilla.redhat.com/show_bug.cgi?id=1345975#c20
@@ -145,7 +156,7 @@ BuildRequires:  openssl-devel
 BuildRequires:  libini_config-devel
 BuildRequires:  cyrus-sasl-devel
 %if ! %{ONLY_CLIENT}
-BuildRequires:  389-ds-base-devel >= %{ds_version}
+BuildRequires:  389-ds-base-devel = %{ds_version}
 BuildRequires:  samba-devel >= %{samba_version}
 BuildRequires:  libtalloc-devel
 BuildRequires:  libtevent-devel
@@ -204,7 +215,7 @@ BuildRequires:  python3-jinja2
 BuildRequires:  python3-jwcrypto >= 0.4.2
 BuildRequires:  python3-ldap >= %{python_ldap_version}
 BuildRequires:  python3-ldap >= %{python_ldap_version}
-BuildRequires:  python3-lib389 >= %{ds_version}
+BuildRequires:  python3-lib389 = %{ds_version}
 BuildRequires:  python3-libipa_hbac
 BuildRequires:  python3-libsss_nss_idmap
 BuildRequires:  python3-lxml
@@ -261,7 +272,7 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: %{name}-common = %{version}-%{release}
 Requires: python3-ipaserver = %{version}-%{release}
 Requires: python3-ldap >= %{python_ldap_version}
-Requires: 389-ds-base >= %{ds_version}
+Requires: 389-ds-base = %{ds_version}
 Requires: openldap-clients > 2.4.35-4
 Requires: nss >= %{nss_version}
 Requires: nss-tools >= %{nss_version}
@@ -289,10 +300,6 @@ Requires(post): systemd-units
 Requires: selinux-policy >= %{selinux_policy_version}
 Requires(post): selinux-policy-base >= %{selinux_policy_version}
 Requires: slapi-nis >= %{slapi_nis_version}
-# jss is an indirect dependency. 4.4.5 fixes sub CA replication bug,
-# see https://pagure.io/freeipa/issue/7536
-# see https://pagure.io/freeipa/issue/7590
-Requires: jss >= 4.4.5-1
 Requires: pki-ca >= %{pki_version}
 Requires: pki-kra >= %{pki_version}
 Requires(preun): systemd-units
@@ -300,7 +307,7 @@ Requires(postun): systemd-units
 Requires: policycoreutils >= 2.1.12-5
 Requires: tar
 Requires(pre): certmonger >= 0.79.5-1
-Requires(pre): 389-ds-base >= %{ds_version}
+Requires(pre): 389-ds-base = %{ds_version}
 Requires: fontawesome-fonts
 Requires: open-sans-fonts
 Requires: openssl
