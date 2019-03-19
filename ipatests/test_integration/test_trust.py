@@ -61,7 +61,7 @@ class ADTrustBase(IntegrationTest):
         except LookupError:
             cls.ad_treedomain = None
 
-        cls.configure_dns_and_time()
+        # cls.configure_dns_and_time()
 
     @classmethod
     def install_adtrust(cls):
