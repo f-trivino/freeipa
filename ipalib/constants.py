@@ -23,6 +23,7 @@ All constants centralised in one file.
 """
 
 import os
+import string
 import socket
 from ipapython.dn import DN
 from ipapython.version import VERSION, API_VERSION
@@ -340,3 +341,41 @@ USER_CACHE_PATH = (
 )
 
 SOFTHSM_DNSSEC_TOKEN_LABEL = u'ipaDNSSEC'
+# Apache's mod_ssl SSLVerifyDepth value (Maximum depth of CA
+# Certificates in Client Certificate verification)
+MOD_SSL_VERIFY_DEPTH = '5'
+
+# subuid / subgid counts are hard-coded
+# An interval of 65536 uids/gids is required to map nobody (65534).
+SUBID_COUNT = 65536
+
+# upper half of uid_t (uint32_t)
+SUBID_RANGE_START = 2 ** 31
+# theoretical max limit is UINT32_MAX-1 ((2 ** 32) - 2)
+# We use a smaller value to keep the topmost subid interval unused.
+SUBID_RANGE_MAX = (2 ** 32) - (2 * SUBID_COUNT)
+SUBID_RANGE_SIZE = SUBID_RANGE_MAX - SUBID_RANGE_START
+# threshold before DNA plugin requests a new range
+SUBID_DNA_THRESHOLD = 500
+
+# moved from ipaserver/install/krainstance.py::KRAInstance to avoid duplication
+# as per https://pagure.io/freeipa/issue/8795
+KRA_TRACKING_REQS = {
+    'auditSigningCert cert-pki-kra': 'caAuditSigningCert',
+    'transportCert cert-pki-kra': 'caTransportCert',
+    'storageCert cert-pki-kra': 'caStorageCert',
+}
+
+ALLOWED_NETBIOS_CHARS = string.ascii_uppercase + string.digits + '-'
+
+# vault data wrapping algorithms
+VAULT_WRAPPING_3DES = 'des-ede3-cbc'
+VAULT_WRAPPING_AES128_CBC = 'aes-128-cbc'
+VAULT_WRAPPING_SUPPORTED_ALGOS = (
+    # old default was 3DES
+    VAULT_WRAPPING_3DES,
+    # supported since pki-kra >= 10.4
+    VAULT_WRAPPING_AES128_CBC,
+)
+# 3DES for backwards compatibility
+VAULT_WRAPPING_DEFAULT_ALGO = VAULT_WRAPPING_3DES
