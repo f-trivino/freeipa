@@ -57,14 +57,110 @@ jobs:
         timeout: 1800
         topology: *build
 
-  fedora-30/temp_commit:
+  fedora-30/test_crlgen_manage:
     requires: [fedora-30/build]
     priority: 50
     job:
       class: RunPytest
       args:
         build_url: '{fedora-30/build_url}'
-        test_suite: test_integration/test_REPLACEME.py
+        test_suite: test_integration/test_crlgen_manage.py
         template: *ci-master-f30
         timeout: 3600
-        topology: *master_1repl_1client
+        topology: *master_1repl
+
+  fedora-30/test_crlgen_manage_1:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_crlgen_manage.py
+        template: *ci-master-f30
+        timeout: 3600
+        topology: *master_1repl
+
+  fedora-30/test_crlgen_manage_2:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_crlgen_manage.py
+        template: *ci-master-f30
+        timeout: 3600
+        topology: *master_1repl
+
+  fedora-30/test_crlgen_manage_3:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_crlgen_manage.py
+        template: *ci-master-f30
+        timeout: 3600
+        topology: *master_1repl
+
+  fedora-30/test_crlgen_manage_4:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_crlgen_manage.py
+        template: *ci-master-f30
+        timeout: 3600
+        topology: *master_1repl
+
+  fedora-30/test_crlgen_manage_5:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_crlgen_manage.py
+        template: *ci-master-f30
+        timeout: 3600
+        topology: *master_1repl
+
+  fedora-30/test_crlgen_manage_6:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_crlgen_manage.py
+        template: *ci-master-f30
+        timeout: 3600
+        topology: *master_1repl
+
+  fedora-30/test_crlgen_manage_7:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_crlgen_manage.py
+        template: *ci-master-f30
+        timeout: 3600
+        topology: *master_1repl
+
+  fedora-30/test_crlgen_manage_8:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_crlgen_manage.py
+        template: *ci-master-f30
+        timeout: 3600
+        topology: *master_1repl
