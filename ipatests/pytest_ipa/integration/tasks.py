@@ -353,6 +353,10 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
     fw = Firewall(host)
     fw_services = ["freeipa-ldap", "freeipa-ldaps"]
 
+    # List ports in use
+    netstat_result = host.run_command(["netstat", "-tulpn"])
+    logger.info("netstat ports: %s", netstat_result.stdout_text)
+
     args = [
         'ipa-server-install',
         '-n', host.domain.name,

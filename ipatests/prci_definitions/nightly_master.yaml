@@ -243,18 +243,6 @@ jobs:
         timeout: 4800
         topology: *master_1repl_1client
 
-  fedora-30/test_smb:
-    requires: [fedora-30/build]
-    priority: 50
-    job:
-      class: RunADTests
-      args:
-        build_url: '{fedora-30/build_url}'
-        test_suite: test_integration/test_smb.py
-        template: *ci-master-f30
-        timeout: 7200
-        topology: *ad_master_2client
-
   fedora-30/test_server_del:
     requires: [fedora-30/build]
     priority: 50
@@ -1336,18 +1324,6 @@ jobs:
         template: *ci-master-f30
         timeout: 10800
         topology: *master_1repl
-
-  fedora-30/test_sssd:
-    requires: [fedora-30/build]
-    priority: 50
-    job:
-      class: RunADTests
-      args:
-        build_url: '{fedora-30/build_url}'
-        test_suite: test_integration/test_sssd.py
-        template: *ci-master-f30
-        timeout: 4800
-        topology: *ad_master
 
   fedora-30/test_ca_custom_sdn:
     requires: [fedora-30/build]
