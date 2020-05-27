@@ -118,8 +118,10 @@ def pytest_addoption(parser):
 
 def pytest_cmdline_main(config):
     kwargs = dict(
-        context=u'cli', in_server=False, in_tree=True, fallback=False
+        context=u'cli', in_server=False, fallback=False
     )
+    # FIXME: workaround for https://pagure.io/freeipa/issue/8317
+    kwargs.update(in_tree=True)
     if not os.path.isfile(os.path.expanduser('~/.ipa/default.conf')):
         # dummy domain/host for machines without ~/.ipa/default.conf
         kwargs.update(domain=u'ipa.test', server=u'master.ipa.test')

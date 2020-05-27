@@ -70,17 +70,6 @@ static char *memberof_pac_attrs[] = {
     NULL
 };
 
-
-static struct {
-    char *service;
-    int length;
-} supported_services[] = {
-    {"cifs", sizeof("cifs")},
-    {"HTTP", sizeof("HTTP")},
-    {NULL, 0}
-};
-
-
 #define SID_ID_AUTHS 6
 #define SID_SUB_AUTHS 15
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -358,6 +347,46 @@ static int sid_split_rid(struct dom_sid *sid, uint32_t *rid)
     return 0;
 }
 
+/* Add Asserted Identity SID */
+static krb5_error_code ipadb_add_asserted_identity(struct ipadb_context *ipactx,
+                                                   unsigned int flags,
+                                                   TALLOC_CTX *memctx,
+                                                   struct netr_SamInfo3 *info3)
+{
+    struct netr_SidAttr *arr = NULL;
+    uint32_t sidcount = info3->sidcount;
+    krb5_error_code ret = 0;
+
+    arr = talloc_realloc(memctx,
+                         info3->sids,
+                         struct netr_SidAttr,
+                         sidcount + 1);
+    if (!arr) {
+        return ENOMEM;
+    }
+    arr[sidcount].sid = talloc_zero(arr, struct dom_sid2);
+    if (!arr[sidcount].sid) {
+        return ENOMEM;
+    }
+
+    /* For S4U2Self, add Service Asserted Identity SID
+     * otherwise, add Authentication Authority Asserted Identity SID */
+    ret = string_to_sid((flags & KRB5_KDB_FLAG_PROTOCOL_TRANSITION) ?
+                        "S-1-18-2" : "S-1-18-1",
+                        arr[sidcount].sid);
+    if (ret) {
+        return ret;
+    }
+    arr[sidcount].attributes = SE_GROUP_MANDATORY |
+                               SE_GROUP_ENABLED |
+                               SE_GROUP_ENABLED_BY_DEFAULT;
+    info3->sids = arr;
+    info3->sidcount = sidcount + 1;
+    info3->base.user_flags |= NETLOGON_EXTRA_SIDS;
+
+    return 0;
+}
+
 static bool is_master_host(struct ipadb_context *ipactx, const char *fqdn)
 {
     int ret;
@@ -383,6 +412,7 @@ static bool is_master_host(struct ipadb_context *ipactx, const char *fqdn)
 
 static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
                                         LDAPMessage *lentry,
+                                        unsigned int flags,
                                         TALLOC_CTX *memctx,
                                         struct netr_SamInfo3 *info3)
 {
@@ -394,7 +424,6 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
     char *strres;
     int intres;
     int ret;
-    int i;
     char **objectclasses = NULL;
     size_t c;
     bool is_host = false;
@@ -403,7 +432,6 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
     bool is_ipauser = false;
     bool is_idobject = false;
     krb5_principal princ;
-    krb5_data *data;
 
     ret = ipadb_ldap_attr_to_strlist(lcontext, lentry, "objectClass",
                                      &objectclasses);
@@ -447,17 +475,10 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
             /* fqdn is mandatory for hosts */
             return ret;
         }
-
-        /* Currently we only add a PAC to TGTs for IPA servers to allow SSSD in
-         * ipa_server_mode to access the AD LDAP server */
-        if (!is_master_host(ipactx, strres)) {
-            free(strres);
-            return ENOENT;
-        }
     } else if (is_service) {
-        ret = ipadb_ldap_attr_to_str(lcontext, lentry, "krbPrincipalName", &strres);
+        ret = ipadb_ldap_attr_to_str(lcontext, lentry, "krbCanonicalName", &strres);
         if (ret) {
-            /* krbPrincipalName is mandatory for services */
+            /* krbCanonicalName is mandatory for services */
             return ret;
         }
 
@@ -468,39 +489,10 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
             return ENOENT;
         }
 
-        if (krb5_princ_size(ipactx->kcontext, princ) != 2) {
-            krb5_free_principal(ipactx->kcontext, princ);
-            return ENOENT;
-        }
-
-        data = krb5_princ_component(ipactx->context, princ, 0);
-        for (i = 0; supported_services[i].service; i++) {
-            if (0 == memcmp(data->data, supported_services[i].service,
-                            MIN(supported_services[i].length, data->length))) {
-                break;
-            }
-        }
-
-        if (supported_services[i].service == NULL) {
-            krb5_free_principal(ipactx->kcontext, princ);
-            return ENOENT;
-        }
-
-        data = krb5_princ_component(ipactx->context, princ, 1);
-        strres = malloc(data->length+1);
-        if (strres == NULL) {
-            krb5_free_principal(ipactx->kcontext, princ);
-            return ENOENT;
-        }
-
-        memcpy(strres, data->data, data->length);
-        strres[data->length] = '\0';
-        krb5_free_principal(ipactx->kcontext, princ);
-
-        /* Only add PAC to TGT to services on IPA masters to allow querying
-         * AD LDAP server */
-        if (!is_master_host(ipactx, strres)) {
-            free(strres);
+        ret = krb5_unparse_name_flags(ipactx->kcontext,
+                                      princ, KRB5_PRINCIPAL_UNPARSE_SHORT,
+                                      &strres);
+        if (ret) {
             return ENOENT;
         }
     } else {
@@ -637,9 +629,19 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
     info3->base.logon_count = 0; /* we do not have this info yet */
     info3->base.bad_password_count = 0; /* we do not have this info yet */
 
-    if (is_host || is_service) {
-        /* Well know RID of domain controllers group */
-        info3->base.rid = 516;
+    if ((is_host || is_service)) {
+        /* it is either host or service, so get the hostname first */
+        char *sep = strchr(info3->base.account_name.string, '/');
+        bool is_master = is_master_host(
+                            ipactx,
+                            sep ? sep + 1 : info3->base.account_name.string);
+        if (is_master) {
+            /* Well know RID of domain controllers group */
+            info3->base.rid = 516;
+        } else {
+            /* Well know RID of domain computers group */
+            info3->base.rid = 515;
+        }
     } else {
         ret = ipadb_ldap_attr_to_str(lcontext, lentry,
                                      "ipaNTSecurityIdentifier", &strres);
@@ -705,7 +707,6 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
                 }
                 if (tgid == prigid) {
                     info3->base.primary_gid = trid;
-                    continue;
                 }
                 info3->base.groups.rids[count].rid = trid;
                 info3->base.groups.rids[count].attributes =
@@ -788,11 +789,13 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
     info3->base.failed_logon_count = 0; /* We do not have it */
     info3->base.reserved = 0; /* Reserved */
 
-    return 0;
+    ret = ipadb_add_asserted_identity(ipactx, flags, memctx, info3);
+    return ret;
 }
 
 static krb5_error_code ipadb_get_pac(krb5_context kcontext,
                                      krb5_db_entry *client,
+                                     unsigned int flags,
                                      krb5_pac *pac)
 {
     TALLOC_CTX *tmpctx;
@@ -805,6 +808,8 @@ static krb5_error_code ipadb_get_pac(krb5_context kcontext,
     union PAC_INFO pac_info;
     krb5_error_code kerr;
     enum ndr_err_code ndr_err;
+    union PAC_INFO pac_upn;
+    char *principal = NULL;
 
     /* When no client entry is there, we cannot generate MS-PAC */
     if (!client) {
@@ -853,7 +858,7 @@ static krb5_error_code ipadb_get_pac(krb5_context kcontext,
     }
 
     /* == Fill Info3 == */
-    kerr = ipadb_fill_info3(ipactx, lentry, tmpctx,
+    kerr = ipadb_fill_info3(ipactx, lentry, flags, tmpctx,
                             &pac_info.logon_info.info->info3);
     if (kerr) {
         goto done;
@@ -878,6 +883,46 @@ static krb5_error_code ipadb_get_pac(krb5_context kcontext,
     data.length = pac_data.length;
 
     kerr = krb5_pac_add_buffer(kcontext, *pac, KRB5_PAC_LOGON_INFO, &data);
+
+    /* == Package UPN_DNS_LOGON_INFO == */
+    memset(&pac_upn, 0, sizeof(pac_upn));
+    kerr = krb5_unparse_name(kcontext, client->princ, &principal);
+    if (kerr) {
+        goto done;
+    }
+
+    pac_upn.upn_dns_info.upn_name = talloc_strdup(tmpctx, principal);
+    krb5_free_unparsed_name(kcontext, principal);
+    if (pac_upn.upn_dns_info.upn_name == NULL) {
+        kerr = KRB5_KDB_INTERNAL_ERROR;
+        goto done;
+    }
+
+    pac_upn.upn_dns_info.dns_domain_name = talloc_strdup(tmpctx, ipactx->realm);
+    if (pac_upn.upn_dns_info.dns_domain_name == NULL) {
+            kerr = KRB5_KDB_INTERNAL_ERROR;
+            goto done;
+    }
+
+    /* IPA user principals are all constructed */
+    if ((pac_info.logon_info.info->info3.base.rid != 515) ||
+        (pac_info.logon_info.info->info3.base.rid != 516)) {
+        pac_upn.upn_dns_info.flags |= PAC_UPN_DNS_FLAG_CONSTRUCTED;
+    }
+
+    ndr_err = ndr_push_union_blob(&pac_data, tmpctx, &pac_upn,
+                                  PAC_TYPE_UPN_DNS_INFO,
+                                  (ndr_push_flags_fn_t)ndr_push_PAC_INFO);
+    if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
+        kerr = KRB5_KDB_INTERNAL_ERROR;
+        goto done;
+    }
+
+    data.magic = KV5M_DATA;
+    data.data = (char *)pac_data.data;
+    data.length = pac_data.length;
+
+    kerr = krb5_pac_add_buffer(kcontext, *pac, KRB5_PAC_UPN_DNS_INFO, &data);
 
 done:
     ldap_msgfree(results);
@@ -1798,8 +1843,12 @@ static krb5_error_code ipadb_verify_pac(krb5_context context,
         priv_key = krbtgt_key;
     }
 
-    kerr = krb5_pac_verify(context, old_pac, authtime,
-                            client_princ, srv_key, priv_key);
+    /* only pass with_realm TRUE when it is cross-realm ticket and S4U
+     * extension (S4U2Self or S4U2Proxy (RBCD)) was requested */
+    kerr = krb5_pac_verify_ext(context, old_pac, authtime,
+                               client_princ, srv_key, priv_key,
+                               (is_cross_realm &&
+                                (flags & KRB5_KDB_FLAG_PROTOCOL_TRANSITION)));
     if (kerr) {
         goto done;
     }
@@ -1833,7 +1882,8 @@ static krb5_error_code ipadb_verify_pac(krb5_context context,
 
     for (i = 0; i < num_buffers; i++) {
         if (types[i] == KRB5_PAC_SERVER_CHECKSUM ||
-            types[i] == KRB5_PAC_PRIVSVR_CHECKSUM) {
+            types[i] == KRB5_PAC_PRIVSVR_CHECKSUM ||
+            types[i] == KRB5_PAC_CLIENT_INFO) {
             continue;
         }
 
@@ -1891,6 +1941,7 @@ done:
 }
 
 static krb5_error_code ipadb_sign_pac(krb5_context context,
+                                      unsigned int flags,
                                       krb5_const_principal client_princ,
                                       krb5_db_entry *server,
                                       krb5_db_entry *krbtgt,
@@ -1906,6 +1957,7 @@ static krb5_error_code ipadb_sign_pac(krb5_context context,
     krb5_principal krbtgt_princ = NULL;
     krb5_error_code kerr;
     char *princ = NULL;
+    bool is_issuing_referral = false;
     int ret;
 
     /* for cross realm trusts cases we need to sign with the right key.
@@ -1964,8 +2016,17 @@ static krb5_error_code ipadb_sign_pac(krb5_context context,
         right_krbtgt_signing_key = krbtgt_key;
     }
 
-    kerr = krb5_pac_sign(context, pac, authtime, client_princ,
-                         server_key, right_krbtgt_signing_key, pac_data);
+#ifdef KRB5_KDB_FLAG_ISSUING_REFERRAL
+    is_issuing_referral = (flags & KRB5_KDB_FLAG_ISSUING_REFERRAL) != 0;
+#endif
+
+    /* only pass with_realm TRUE when it is cross-realm ticket and S4U2Self
+     * was requested */
+    kerr = krb5_pac_sign_ext(context, pac, authtime, client_princ, server_key,
+                             right_krbtgt_signing_key,
+                             (is_issuing_referral &&
+                              (flags & KRB5_KDB_FLAG_PROTOCOL_TRANSITION)),
+                             pac_data);
 
 done:
     free(princ);
@@ -2182,9 +2243,10 @@ krb5_error_code ipadb_sign_authdata(krb5_context context,
     }
 
     /* we need to create a PAC if we are requested one and this is an AS REQ,
-     * or we are doing protocol transition (s4u2self) */
+     * or we are doing protocol transition (S4USelf) but not over cross-realm
+     */
     if ((is_as_req && (flags & KRB5_KDB_FLAG_INCLUDE_PAC)) ||
-        (flags & KRB5_KDB_FLAG_PROTOCOL_TRANSITION)) {
+        ((flags & KRB5_KDB_FLAG_PROTOCOL_TRANSITION) && (client != NULL))) {
         make_ad = true;
     }
 
@@ -2213,7 +2275,7 @@ krb5_error_code ipadb_sign_authdata(krb5_context context,
 
         (void)ipadb_reinit_mspac(ipactx, force_reinit_mspac);
 
-        kerr = ipadb_get_pac(context, client, &pac);
+        kerr = ipadb_get_pac(context, client, flags, &pac);
         if (kerr != 0 && kerr != ENOENT) {
             goto done;
         }
@@ -2227,7 +2289,7 @@ krb5_error_code ipadb_sign_authdata(krb5_context context,
         /* check or generate pac data */
         if ((pac_auth_data == NULL) || (pac_auth_data[0] == NULL)) {
             if (flags & KRB5_KDB_FLAG_CONSTRAINED_DELEGATION) {
-                kerr = ipadb_get_pac(context, client_entry, &pac);
+                kerr = ipadb_get_pac(context, client_entry, flags, &pac);
                 if (kerr != 0 && kerr != ENOENT) {
                     goto done;
                 }
@@ -2254,7 +2316,7 @@ krb5_error_code ipadb_sign_authdata(krb5_context context,
         goto done;
     }
 
-    kerr = ipadb_sign_pac(context, ks_client_princ, server, krbtgt,
+    kerr = ipadb_sign_pac(context, flags, ks_client_princ, server, krbtgt,
                           server_key, krbtgt_key, authtime, pac, &pac_data);
     if (kerr != 0) {
         goto done;

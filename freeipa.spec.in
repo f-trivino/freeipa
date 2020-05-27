@@ -192,7 +192,7 @@ BuildRequires:  libsss_idmap-devel
 BuildRequires:  libsss_certmap-devel
 BuildRequires:  libsss_nss_idmap-devel >= %{sssd_version}
 BuildRequires:  nodejs(abi)
-BuildRequires:  uglify-js
+BuildRequires:  python3-rjsmin
 BuildRequires:  libverto-devel
 BuildRequires:  libunistring-devel
 # 0.13.0: https://bugzilla.redhat.com/show_bug.cgi?id=1584773
@@ -1136,6 +1136,7 @@ fi
 %{_libexecdir}/ipa/ipa-pki-retrieve-key
 %{_libexecdir}/ipa/ipa-pki-wait-running
 %{_libexecdir}/ipa/ipa-otpd
+%{_libexecdir}/ipa/ipa-print-pac
 %dir %{_libexecdir}/ipa/custodia
 %attr(755,root,root) %{_libexecdir}/ipa/custodia/ipa-custodia-dmldap
 %attr(755,root,root) %{_libexecdir}/ipa/custodia/ipa-custodia-pki-tomcat

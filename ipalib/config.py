@@ -457,11 +457,11 @@ class Env:
         # Merge in overrides:
         self._merge(**overrides)
 
-        # Determine if running in source tree:
+        # Determine if running in source tree. The root directory of
+        # IPA source directory contains ipasetup.py.in.
         if 'in_tree' not in self:
-            self.in_tree = (
-                self.bin == self.site_packages
-                and path.isfile(path.join(self.bin, 'setup.py'))
+            self.in_tree = os.path.isfile(
+                os.path.join(self.site_packages, "ipasetup.py.in")
             )
         if self.in_tree and 'mode' not in self:
             self.mode = 'developer'
@@ -561,6 +561,8 @@ class Env:
 
         # Merge in context config file and then default config file:
         mode = self.__d.get('mode')  # pylint: disable=no-member
+        # documented public modes: production, developer
+        # internal modes: dummy, unit_test
         if mode != 'dummy':
             self._merge_from_file(self.conf)
             self._merge_from_file(self.conf_default)
