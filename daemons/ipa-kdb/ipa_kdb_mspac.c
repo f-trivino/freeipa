@@ -1559,7 +1559,7 @@ static krb5_error_code save_logon_info(krb5_context context,
 }
 
 static struct ipadb_adtrusts *get_domain_from_realm(krb5_context context,
-                                                    krb5_data realm)
+                                                    krb5_data *realm)
 {
     struct ipadb_context *ipactx;
     struct ipadb_adtrusts *domain;
@@ -1576,10 +1576,10 @@ static struct ipadb_adtrusts *get_domain_from_realm(krb5_context context,
 
     for (i = 0; i < ipactx->mspac->num_trusts; i++) {
         domain = &ipactx->mspac->trusts[i];
-        if (strlen(domain->domain_name) != realm.length) {
+        if (strlen(domain->domain_name) != realm->length) {
             continue;
         }
-        if (strncasecmp(domain->domain_name, realm.data, realm.length) == 0) {
+        if (strncasecmp(domain->domain_name, realm->data, realm->length) == 0) {
             return domain;
         }
     }
@@ -1588,7 +1588,7 @@ static struct ipadb_adtrusts *get_domain_from_realm(krb5_context context,
 }
 
 static struct ipadb_adtrusts *get_domain_from_realm_update(krb5_context context,
-                                                           krb5_data realm)
+                                                           krb5_data *realm)
 {
     struct ipadb_context *ipactx;
     struct ipadb_adtrusts *domain;
@@ -1752,7 +1752,7 @@ done:
 
 krb5_error_code filter_logon_info(krb5_context context,
                                   TALLOC_CTX *memctx,
-                                  krb5_data realm,
+                                  krb5_data *realm,
                                   struct PAC_LOGON_INFO_CTR *info)
 {
 
@@ -1978,6 +1978,7 @@ krb5_error_code filter_logon_info(krb5_context context,
 
 static krb5_error_code ipadb_check_logon_info(krb5_context context,
                                               krb5_db_entry *client,
+                                              krb5_db_entry *signing_krbtgt,
                                               krb5_boolean is_cross_realm,
                                               krb5_boolean is_s4u,
                                               krb5_data *pac_blob,
@@ -2052,7 +2053,13 @@ static krb5_error_code ipadb_check_logon_info(krb5_context context,
         goto done;
     }
 
-    kerr = filter_logon_info(context, tmpctx, origin_realm, &info);
+    if (client != NULL) {
+        origin_realm = client->princ->realm;
+    } else {
+        origin_realm = signing_krbtgt->princ->realm;
+    }
+
+    kerr = filter_logon_info(context, tmpctx, &origin_realm, &info);
     if (kerr) {
         goto done;
     }
@@ -2268,6 +2275,7 @@ krb5_error_code ipadb_common_verify_pac(krb5_context context,
 
     kerr = ipadb_check_logon_info(context,
                                   client,
+                                  signing_krbtgt,
                                   is_cross_realm,
                                   (flags & KRB5_KDB_FLAGS_S4U),
                                   &pac_blob,
