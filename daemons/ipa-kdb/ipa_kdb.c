@@ -798,11 +798,11 @@ kdb_vftabl kdb_function_table = {
 #endif
 
 #if (KRB5_KDB_DAL_MAJOR_VERSION == 9)
-#error DAL version 9 is not supported yet
 /* Version 9 removes sign_authdata and adds issue_pac method. It is a complete
  * revamp of how PAC is issued, so we need to implement it differently to previous
  * versions. */
 
+krb5_error_code
 ipadb_v9_issue_pac(krb5_context context, unsigned int flags,
                    krb5_db_entry *client,
                    krb5_keyblock *replaced_reply_key,

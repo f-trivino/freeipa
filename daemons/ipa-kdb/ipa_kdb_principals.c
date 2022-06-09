@@ -1362,6 +1362,9 @@ static krb5_boolean is_request_for_us(krb5_context kcontext,
 {
     krb5_boolean for_us;
 
+    if (search_for == NULL) {
+        return FALSE;
+    }
     for_us = krb5_realm_compare(kcontext, local_tgs, search_for) ||
              krb5_principal_compare_any_realm(kcontext,
                                               local_tgs, search_for);
@@ -1381,8 +1384,7 @@ static krb5_error_code dbget_princ(krb5_context kcontext,
     uint32_t pol;
 
 
-    if ((flags & KRB5_KDB_FLAG_CLIENT_REFERRALS_ONLY) != 0 &&
-        (flags & KRB5_KDB_FLAG_CANONICALIZE) != 0) {
+    if ((flags & CLIENT_FLAGS) == (CLIENT_FLAGS)) {
 
         /* AS_REQ with canonicalization*/
         krb5_principal norm_princ = NULL;
@@ -1507,8 +1509,8 @@ static krb5_error_code dbget_alias(krb5_context kcontext,
      * both client and server referrals. But it is more useful to ignore it
      * like Windows KDC does for client referrals.
      */
-    if (((flags & KRB5_KDB_FLAG_CANONICALIZE) == 0) &&
-        ((flags & KRB5_KDB_FLAG_CLIENT_REFERRALS_ONLY) == 0)) {
+    if (((flags & (CLIENT_FLAGS)) == 0) &&
+        ((flags & (CLIENT_REFERRALS_FLAGS)) == 0)) {
         kerr = KRB5_KDB_NOENTRY;
         goto done;
     }
@@ -1540,7 +1542,7 @@ static krb5_error_code dbget_alias(krb5_context kcontext,
 
     /* This is a known trusted realm. Issue a referral depending on whether this
      * is client or server referral request */
-    if (flags & KRB5_KDB_FLAG_CLIENT_REFERRALS_ONLY) {
+    if (flags & (CLIENT_FLAGS) != 0) {
         /* client referral out of realm, set next realm. */
         kerr = krb5_set_principal_realm(kcontext, norm_princ, trusted_realm);
         if (kerr != 0) {
@@ -1559,7 +1561,7 @@ static krb5_error_code dbget_alias(krb5_context kcontext,
         goto done;
     }
 
-    if (flags & KRB5_KDB_FLAG_INCLUDE_PAC) {
+    if (flags & (CLIENT_INCLUDE_PAC_FLAGS) != 0) {
         /* TGS request where KDC wants to generate PAC
          * but the principal is out of our realm */
         kerr = KRB5_KDB_NOENTRY;

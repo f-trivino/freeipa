@@ -31,44 +31,21 @@
 
 #include "ipa_kdb_mspac_private.h"
 
-krb5_error ipadb_v9_update_pac(krb5_context context, unsigned int flags,
-                               krb5_db_entry *client,
-                               krb5_db_entry *server,
-                               krb5_db_entry *signing_krbtgt,
-                               krb5_keyblock *replaced_reply_key,
-                               krb5_timestamp authtime,
-                               krb5_pac old_pac,
-                               krb5_pac *new_pac)
+krb5_error_code
+ipadb_v9_issue_pac(krb5_context context, unsigned int flags,
+                   krb5_db_entry *client,
+                   krb5_keyblock *replaced_reply_key,
+                   krb5_db_entry *server,
+                   krb5_db_entry *signing_krbtgt,
+                   krb5_timestamp authtime,
+                   krb5_pac old_pac,
+                   krb5_pac new_pac,
+                   krb5_data ***auth_indicators)
 {
-    krb5_error kerr = EINVAL;
-
-    kerr = ipadb_common_verify_pac(context,
-                                    flags,
-                                    client,
-                                    server,
-                                    signing_krbtgt,
-                                    NULL,
-                                    authtime,
-                                    old_pac,
-                                    new_pac);
-
-    return kerr;
-}
-
-krb5_error ipadb_v9_issue_pac(krb5_context context, unsigned int flags,
-                              krb5_db_entry *client,
-                              krb5_keyblock *replaced_reply_key,
-                              krb5_db_entry *server,
-                              krb5_db_entry *signing_krbtgt,
-                              krb5_timestamp authtime,
-                              krb5_pac old_pac,
-                              krb5_pac new_pac,
-                              krb5_data ***auth_indicators)
-{
-    krb5_boolean with_pac;
-    krb5_boolean with_pad;
-    krb5_error kerr = EINVAL;
-    krb5_boolean is_as_req = ((flags & KRB5_KDB_FLAG_CLIENT_REFERRALS_ONLY) != 0);
+    bool with_pac;
+    bool with_pad;
+    krb5_error_code kerr = 0;
+    krb5_boolean is_as_req = ((flags & (CLIENT_FLAGS)) != 0);
 
     if (is_as_req) {
         get_authz_data_types(context, client, &with_pac, &with_pad);
@@ -109,7 +86,7 @@ krb5_error ipadb_v9_issue_pac(krb5_context context, unsigned int flags,
         /* generate initial PAC */
         if (with_pac) {
             krb5_boolean force_reinit_mspac = FALSE;
-            ipactx = ipadb_get_context(context);
+            struct ipadb_context *ipactx = ipadb_get_context(context);
             int result = 0;
 
             if (!ipactx) {
@@ -138,9 +115,6 @@ krb5_error ipadb_v9_issue_pac(krb5_context context, unsigned int flags,
             kerr = ipadb_get_pac(context, flags,
                                  client, server, replaced_reply_key,
                                  authtime, &new_pac);
-            if (kerr != 0 && kerr != ENOENT) {
-                goto done;
-            }
         }
     } else {
         kerr = ipadb_common_verify_pac(context, flags,
@@ -149,6 +123,9 @@ krb5_error ipadb_v9_issue_pac(krb5_context context, unsigned int flags,
                                         NULL,
                                         authtime,
                                         old_pac, &new_pac);
+        if (kerr == ENOENT) {
+            kerr = 0;
+        }
     }
 
     /* in krb5 1.20 no need to sign tickets anymore, KDC does it for us */

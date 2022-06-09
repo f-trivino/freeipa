@@ -1155,7 +1155,7 @@ krb5_error_code ipadb_get_pac(krb5_context kcontext,
 
 #ifdef HAVE_PAC_REQUESTER_SID
     /* MS-KILE 3.3.5.6.4.8: add PAC_REQUESTER_SID only in TGT case */
-    if ((flags & KRB5_KDB_FLAG_CLIENT_REFERRALS_ONLY) != 0) {
+    if ((flags & (CLIENT_REFERRALS_FLAGS)) != 0) {
         union PAC_INFO pac_requester_sid;
         /* == Package PAC_REQUESTER_SID == */
         memset(&pac_requester_sid, 0, sizeof(pac_requester_sid));
@@ -2374,6 +2374,7 @@ krb5_error_code ipadb_common_verify_pac(krb5_context context,
         }
     }
 
+#if !defined(KRB5_KDB_FLAG_CLIENT)
     if (flags & KRB5_KDB_FLAG_CONSTRAINED_DELEGATION) {
         if (client == NULL) {
             if (new_pac != *pac) {
@@ -2390,6 +2391,7 @@ krb5_error_code ipadb_common_verify_pac(krb5_context context,
             goto done;
         }
     }
+#endif
 
     *pac = new_pac;
 
@@ -2504,9 +2506,12 @@ void get_authz_data_types(krb5_context context, krb5_db_entry *entry,
                 none_found = true;
             }
         } else {
-            krb5_klog_syslog(LOG_ERR, "Ignoring unsupported " \
-                                      "authorization data type [%s].",
-                                      authz_data_list[c]);
+            /* for out-of-realm entries we suppress warnings in our defaults */
+            if (entry != NULL) {
+                krb5_klog_syslog(LOG_ERR, "Ignoring unsupported " \
+                                        "authorization data type [%s].",
+                                        authz_data_list[c]);
+            }
         }
     }
 
