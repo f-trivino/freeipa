@@ -46,12 +46,50 @@ ipadb_v9_issue_pac(krb5_context context, unsigned int flags,
     bool with_pad;
     krb5_error_code kerr = 0;
     krb5_boolean is_as_req = ((flags & (CLIENT_FLAGS)) != 0);
+    char *principal = NULL;
+
+    if (client) {
+        /* unparse the Kerberos principal without (our) outer realm. */
+        kerr = krb5_unparse_name_flags(context, client->princ,
+                                    KRB5_PRINCIPAL_UNPARSE_NO_REALM |
+                                    KRB5_PRINCIPAL_UNPARSE_DISPLAY,
+                                    &principal);
+        krb5_klog_syslog(LOG_ERR, "issue_pac: kerr: %d, client %s, flags: %x (client:%d, referrals:%d)",
+            kerr, principal,
+            flags,
+            ((flags & CLIENT_FLAGS) == CLIENT_FLAGS),
+            (flags & CLIENT_REFERRALS_FLAGS) != 0);
+        krb5_free_unparsed_name(context, principal);
+    }
+    if (server) {
+        /* unparse the Kerberos principal without (our) outer realm. */
+        kerr = krb5_unparse_name_flags(context, server->princ,
+                                    KRB5_PRINCIPAL_UNPARSE_NO_REALM |
+                                    KRB5_PRINCIPAL_UNPARSE_DISPLAY,
+                                    &principal);
+        krb5_klog_syslog(LOG_ERR, "issue_pac: kerr: %d, server %s",
+            kerr, principal);
+        krb5_free_unparsed_name(context, principal);
+    }
+    if (signing_krbtgt) {
+        /* unparse the Kerberos principal without (our) outer realm. */
+        kerr = krb5_unparse_name_flags(context, signing_krbtgt->princ,
+                                    KRB5_PRINCIPAL_UNPARSE_NO_REALM |
+                                    KRB5_PRINCIPAL_UNPARSE_DISPLAY,
+                                    &principal);
+        krb5_klog_syslog(LOG_ERR, "issue_pac: kerr: %d, signing krbtgt %s",
+            kerr, principal);
+        krb5_free_unparsed_name(context, principal);
+    }
 
     if (is_as_req) {
         get_authz_data_types(context, client, &with_pac, &with_pad);
     } else {
         get_authz_data_types(context, server, &with_pac, &with_pad);
     }
+
+    krb5_klog_syslog(LOG_ERR, "issue_pac: old_pac: %p, new_pac: %p, with pac: %d",
+        old_pac, new_pac, with_pac);
 
     if (with_pad) {
         krb5_klog_syslog(LOG_ERR, "PAD authorization data is requested but " \

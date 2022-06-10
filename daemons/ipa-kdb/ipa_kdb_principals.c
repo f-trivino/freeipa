@@ -1383,6 +1383,19 @@ static krb5_error_code dbget_princ(krb5_context kcontext,
     LDAPMessage *lentry;
     uint32_t pol;
 
+    if (search_for) {
+        /* unparse the Kerberos principal without (our) outer realm. */
+        kerr = krb5_unparse_name_flags(kcontext, search_for,
+                                    KRB5_PRINCIPAL_UNPARSE_NO_REALM |
+                                    KRB5_PRINCIPAL_UNPARSE_DISPLAY,
+                                    &principal);
+        krb5_klog_syslog(LOG_ERR, "dbget_princ: ctx=%p, kerr: %d, search for %s, flags: %x (client:%d, referrals:%d)",
+            ipactx, kerr, principal,
+            flags,
+            ((flags & CLIENT_FLAGS) == CLIENT_FLAGS),
+            (flags & CLIENT_REFERRALS_FLAGS) != 0);
+        krb5_free_unparsed_name(kcontext, principal);
+    }
 
     if ((flags & CLIENT_FLAGS) == (CLIENT_FLAGS)) {
 
@@ -1465,6 +1478,19 @@ static krb5_error_code dbget_alias(krb5_context kcontext,
     krb5_db_entry *kentry = NULL;
     krb5_data *realm;
 
+    if (search_for) {
+        /* unparse the Kerberos principal without (our) outer realm. */
+        kerr = krb5_unparse_name_flags(kcontext, search_for,
+                                    KRB5_PRINCIPAL_UNPARSE_NO_REALM |
+                                    KRB5_PRINCIPAL_UNPARSE_DISPLAY,
+                                    &principal);
+        krb5_klog_syslog(LOG_ERR, "dbget_alias: ctx=%p, kerr: %d, search for %s, flags: %x (client:%d, referrals:%d)",
+            ipactx, kerr, principal,
+            flags,
+            ((flags & CLIENT_FLAGS) == CLIENT_FLAGS),
+            (flags & CLIENT_REFERRALS_FLAGS) != 0);
+        krb5_free_unparsed_name(kcontext, principal);
+    }
     /* TODO: also support hostbased aliases */
 
     /* Enterprise principal name type is for potential aliases or principals
