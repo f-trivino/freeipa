@@ -45,7 +45,7 @@ ipadb_v9_issue_pac(krb5_context context, unsigned int flags,
     bool with_pac;
     bool with_pad;
     krb5_error_code kerr = 0;
-    krb5_boolean is_as_req = ((flags & (CLIENT_FLAGS)) != 0);
+    krb5_boolean is_as_req = ((flags & (CLIENT_REFERRALS_FLAGS)) != 0);
     char *principal = NULL;
 
     if (client) {
@@ -150,6 +150,10 @@ ipadb_v9_issue_pac(krb5_context context, unsigned int flags,
             }
             (void)ipadb_reinit_mspac(ipactx, force_reinit_mspac);
 
+            /* MS-PAC needs proper configuration and if it is missing, we simply skip issuing one */
+            if (ipactx->mspac->flat_server_name == NULL) {
+                return KRB5_PLUGIN_OP_NOTSUPP;
+            }
             kerr = ipadb_get_pac(context, flags,
                                  client, server, replaced_reply_key,
                                  authtime, &new_pac);
