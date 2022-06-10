@@ -480,6 +480,7 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
 
     if (!is_host && !is_user && !is_service) {
         /* We only handle users and hosts, and services */
+        krb5_klog_syslog(LOG_ERR, "fill_info3: wrong type of object");
         return ENOENT;
     }
 
@@ -487,6 +488,7 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
         ret = ipadb_ldap_attr_to_str(ipactx->lcontext, lentry, "fqdn", &strres);
         if (ret) {
             /* fqdn is mandatory for hosts */
+            krb5_klog_syslog(LOG_ERR, "fill_info3: couldn't get fqdn, ret: %d", ret);
             return ret;
         }
     } else if (is_service) {
@@ -494,11 +496,13 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
                                      "krbCanonicalName", &strres);
         if (ret) {
             /* krbCanonicalName is mandatory for services */
+            krb5_klog_syslog(LOG_ERR, "fill_info3: couldn't get krbCanonicalName, ret: %d", ret);
             return ret;
         }
 
         ret = krb5_parse_name(ipactx->kcontext, strres, &princ);
 
+        krb5_klog_syslog(LOG_ERR, "fill_info3: parsed principal name %s, ret: %d", strres, ret);
         free(strres);
         if (ret) {
             return ENOENT;
@@ -514,6 +518,7 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
         ret = ipadb_ldap_attr_to_str(ipactx->lcontext, lentry, "uid", &strres);
         if (ret) {
             /* uid is mandatory */
+            krb5_klog_syslog(LOG_ERR, "fill_info3: couldn't get uid, ret: %d", ret);
             return ret;
         }
     }
@@ -658,6 +663,7 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
     if (ret) {
         /* SID is mandatory for all but host/services */
         if (!(is_host || is_service)) {
+            krb5_klog_syslog(LOG_ERR, "fill_info3: couldn't get ipaNTSecurityIdentifier for host or service, ret: %d", ret);
             return ret;
         }
         info3->base.rid = 0;
@@ -772,6 +778,7 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
                 info3->base.primary_gid = ipactx->mspac->fallback_rid;
             } else {
                 /* can't give a pack without a primary group rid */
+                krb5_klog_syslog(LOG_ERR, "fill_info3: cannot get primary gid, ret: %d", ret);
                 return ENOENT;
             }
         }
@@ -791,6 +798,7 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
         }
     } else {
         /* can't give a pack without Server NetBIOS Name :-| */
+        krb5_klog_syslog(LOG_ERR, "fill_info3: couldn't get server NetBIOS name, ret: %d", ret);
         return ENOENT;
     }
 
@@ -802,6 +810,7 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
         }
     } else {
         /* can't give a pack without Domain NetBIOS Name :-| */
+        krb5_klog_syslog(LOG_ERR, "fill_info3: couldn't get domain NetBIOS name, ret: %d", ret);
         return ENOENT;
     }
 
@@ -830,6 +839,7 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
     info3->base.reserved = 0; /* Reserved */
 
     ret = ipadb_add_asserted_identity(ipactx, flags, memctx, info3);
+    krb5_klog_syslog(LOG_ERR, "fill_info3: added asserted identity, ret: %d", ret);
     return ret;
 }
 
@@ -1040,11 +1050,13 @@ krb5_error_code ipadb_get_pac(krb5_context kcontext,
                               "(objectclass=*)", user_pac_attrs,
                               deref_search_attrs, memberof_pac_attrs,
                               &results);
+    krb5_klog_syslog(LOG_ERR, "ipadb_get_pac: deref_search result kerr: %d", kerr);
     if (kerr) {
         goto done;
     }
 
     lentry = ldap_first_entry(ipactx->lcontext, results);
+    krb5_klog_syslog(LOG_ERR, "ipadb_get_pac: first_entry result lentry: %p", lentry);
     if (!lentry) {
         kerr = ENOENT;
         goto done;
@@ -1053,6 +1065,7 @@ krb5_error_code ipadb_get_pac(krb5_context kcontext,
     /* == Fill Info3 == */
     kerr = ipadb_fill_info3(ipactx, lentry, flags, tmpctx, authtime,
                             &pac_info.logon_info.info->info3);
+    krb5_klog_syslog(LOG_ERR, "ipadb_get_pac: fill_info3 result kerr: %d", kerr);
     if (kerr) {
         goto done;
     }
@@ -1084,6 +1097,7 @@ krb5_error_code ipadb_get_pac(krb5_context kcontext,
     /* == Package UPN_DNS_LOGON_INFO == */
     memset(&pac_upn, 0, sizeof(pac_upn));
     kerr = krb5_unparse_name(kcontext, client->princ, &principal);
+    krb5_klog_syslog(LOG_ERR, "ipadb_get_pac: UPN_DNS_LOGON_INFO principal %s, kerr: %d", principal, kerr);
     if (kerr) {
         goto done;
     }
@@ -1108,6 +1122,7 @@ krb5_error_code ipadb_get_pac(krb5_context kcontext,
     }
 
     kerr = ipadb_get_sid_from_pac(tmpctx, pac_info.logon_info.info, &client_sid);
+    krb5_klog_syslog(LOG_ERR, "ipadb_get_pac: sid_from_pac result kerr: %d", kerr);
     if (kerr) {
         goto done;
     }
@@ -1139,6 +1154,7 @@ krb5_error_code ipadb_get_pac(krb5_context kcontext,
         DATA_BLOB pac_attrs_data;
 
         kerr = ipadb_get_pac_attrs_blob(tmpctx, NULL, &pac_attrs_data);
+        krb5_klog_syslog(LOG_ERR, "ipadb_get_pac: pac_attrs_blob result kerr: %d", kerr);
         if (kerr) {
             goto done;
         }
@@ -1182,6 +1198,7 @@ krb5_error_code ipadb_get_pac(krb5_context kcontext,
 #endif
 
 done:
+    krb5_klog_syslog(LOG_ERR, "ipadb_get_pac: kerr: %d", kerr);
     ldap_msgfree(results);
     talloc_free(tmpctx);
     return kerr;
