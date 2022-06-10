@@ -480,6 +480,63 @@ static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
 
     if (!is_host && !is_user && !is_service) {
         /* We only handle users and hosts, and services */
+
+        /* TODO: handle krbtgt/TRUST-REALM case which happens when a service
+         * allowed to do protocol transition with --ok-to-auth-as-delegate and
+         * it asks for a cross-realm ticket for protocol transition */
+
+        /* Example:
+        1. AS-REQ of host/idm.ipa.test
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for host/idm.ipa.test, flags: 50 (client:1, referrals:1)
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for krbtgt/IPA.TEST, flags: 0 (client:0, referrals:0)
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](info): AS_REQ (6 etypes {aes256-cts-hmac-sha1-96(18), aes256-cts-hmac-sha384-192(20), camellia256-cts-cmac(26), aes128-cts-hmac-sha256-128(19), aes128-cts-hmac-sha1-96(17), camellia128-ct
+s-cmac(25)}) 10.0.189.76: NEEDED_PREAUTH: host/idm.ipa.test@IPA.TEST for krbtgt/IPA.TEST@IPA.TEST, Additional pre-authentication required
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](info): closing down fd 11
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for host/idm.ipa.test, flags: 50 (client:1, referrals:1)
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for krbtgt/IPA.TEST, flags: 0 (client:0, referrals:0)
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): issue_pac: kerr: 0, client host/idm.ipa.test, flags: 50 (client:1, referrals:1)
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): issue_pac: kerr: 0, server krbtgt/IPA.TEST
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): issue_pac: old_pac: (nil), new_pac: 0x562f01ea06b0, with pac: 1
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): ipadb_get_pac: deref_search result kerr: 0
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): ipadb_get_pac: first_entry result lentry: 0x562f01fafd00
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): fill_info3: added asserted identity, ret: 0
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): ipadb_get_pac: fill_info3 result kerr: 0
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): ipadb_get_pac: UPN_DNS_LOGON_INFO principal host/idm.ipa.test@IPA.TEST, kerr: 0
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): ipadb_get_pac: sid_from_pac result kerr: 0
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): ipadb_get_pac: pac_attrs_blob result kerr: 0
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](Error): ipadb_get_pac: kerr: 0
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](info): AS_REQ (6 etypes {aes256-cts-hmac-sha1-96(18), aes256-cts-hmac-sha384-192(20), camellia256-cts-cmac(26), aes128-cts-hmac-sha256-128(19), aes128-cts-hmac-sha1-96(17), camellia128-ct
+s-cmac(25)}) 10.0.189.76: ISSUE: authtime 1654881355, etypes {rep=aes256-cts-hmac-sha1-96(18), tkt=aes256-cts-hmac-sha384-192(20), ses=aes256-cts-hmac-sha1-96(18)}, host/idm.ipa.test@IPA.TEST for krbtgt/IPA.TEST@IPA.TEST
+Jun 10 17:15:55 idm.ipa.test krb5kdc[95304](info): closing down fd 11
+        2. AS-REQ for Administrator@WIN2022.TEST as an enterprise principal to figure out client realm
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for Administrator@WIN2022.TEST, flags: 50 (client:1, referrals:1)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): dbget_alias: ctx=0x562f01e672b0, kerr: 0, search for Administrator@WIN2022.TEST, flags: 50 (client:1, referrals:1)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for krbtgt/WIN2022.TEST, flags: 50 (client:1, referrals:1)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for krbtgt/IPA.TEST, flags: 0 (client:0, referrals:0)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](info): AS_REQ (6 etypes {aes256-cts-hmac-sha1-96(18), aes256-cts-hmac-sha384-192(20), camellia256-cts-cmac(26), aes128-cts-hmac-sha256-128(19), aes128-cts-hmac-sha1-96(17), camellia128-ct
+s-cmac(25)}) 10.0.189.76: NEEDED_PREAUTH: Administrator\@WIN2022.TEST@IPA.TEST for krbtgt/IPA.TEST@IPA.TEST, Additional pre-authentication required
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](info): closing down fd 11
+        3. TGS-REQ for krbtgt/WIN2022.TEST to reach the client realm, specifying protocol transition (flags: 100 in issue_pac())
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for krbtgt/IPA.TEST, flags: 0 (client:0, referrals:0)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for host/idm.ipa.test, flags: 10 (client:0, referrals:1)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for Administrator@WIN2022.TEST, flags: 40 (client:1, referrals:0)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): dbget_alias: ctx=0x562f01e672b0, kerr: 0, search for Administrator@WIN2022.TEST, flags: 40 (client:1, referrals:0)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for krbtgt/WIN2022.TEST, flags: 40 (client:1, referrals:0)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): dbget_princ: ctx=0x562f01e672b0, kerr: 0, search for host/idm.ipa.test, flags: 40 (client:1, referrals:0)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): issue_pac: kerr: 0, client krbtgt/WIN2022.TEST, flags: 100 (client:0, referrals:0)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): issue_pac: kerr: 0, server host/idm.ipa.test
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): issue_pac: kerr: 0, signing krbtgt krbtgt/IPA.TEST
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): issue_pac: old_pac: 0x562f01ea44e0, new_pac: 0x562f01f9e110, with pac: 1
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): ipadb_get_pac: deref_search result kerr: 0
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): ipadb_get_pac: first_entry result lentry: 0x562f01ea16e0
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): fill_info3: wrong type of object
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): ipadb_get_pac: fill_info3 result kerr: 2
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](Error): ipadb_get_pac: kerr: 2
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](info): TGS_REQ : handle_authdata (2)
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](info): TGS_REQ (6 etypes {aes256-cts-hmac-sha1-96(18), aes256-cts-hmac-sha384-192(20), camellia256-cts-cmac(26), aes128-cts-hmac-sha256-128(19), aes128-cts-hmac-sha1-96(17), camellia128-cts-cmac(25)}) 10.0.189.76: HANDLE_AUTHDATA: authtime 1654881355, etypes {rep=UNSUPPORTED:(0)} host/idm.ipa.test@IPA.TEST for host/idm.ipa.test@IPA.TEST, No such file or directory
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](info): ... PROTOCOL-TRANSITION s4u-client=Administrator\@WIN2022.TEST@IPA.TEST
+Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](info): closing down fd 11
+        */
         krb5_klog_syslog(LOG_ERR, "fill_info3: wrong type of object");
         return ENOENT;
     }
