@@ -426,6 +426,7 @@ static bool is_master_host(struct ipadb_context *ipactx, const char *fqdn)
 
 static krb5_error_code ipadb_fill_info3(struct ipadb_context *ipactx,
                                         LDAPMessage *lentry,
+                                        LDAPMessage *sentry,
                                         unsigned int flags,
                                         TALLOC_CTX *memctx,
                                         krb5_timestamp authtime,
@@ -627,7 +628,20 @@ Jun 10 17:15:57 idm.ipa.test krb5kdc[95303](info): closing down fd 11
         unix_to_nt_time(&info3->base.last_password_change, timeres);
         break;
     case ENOENT:
-        info3->base.last_password_change = 0;
+        /* If second entry is present, use Kerberos attributes from it */
+        if (sentry != NULL) {
+            ret = ipadb_ldap_attr_to_time_t(ipactx->lcontext, sentry,
+                                            "krbLastPwdChange", &timeres);
+            switch (ret) {
+            case 0:
+                unix_to_nt_time(&info3->base.last_password_change, timeres);
+                break;
+            default:
+            break;
+            }
+        } else {
+            info3->base.last_password_change = 0;
+        }
         break;
     default:
         return ret;
@@ -1060,8 +1074,8 @@ krb5_error_code ipadb_get_pac(krb5_context kcontext,
     TALLOC_CTX *tmpctx;
     struct ipadb_e_data *ied;
     struct ipadb_context *ipactx;
-    LDAPMessage *results = NULL;
-    LDAPMessage *lentry;
+    LDAPMessage *results = NULL, *sresults = NULL;
+    LDAPMessage *lentry = NULL, *sentry = NULL;
     DATA_BLOB pac_data;
     krb5_data data;
     union PAC_INFO pac_info;
@@ -1107,7 +1121,7 @@ krb5_error_code ipadb_get_pac(krb5_context kcontext,
                               "(objectclass=*)", user_pac_attrs,
                               deref_search_attrs, memberof_pac_attrs,
                               &results);
-    krb5_klog_syslog(LOG_ERR, "ipadb_get_pac: deref_search result kerr: %d", kerr);
+    krb5_klog_syslog(LOG_ERR, "ipadb_get_pac[lentry]: deref_search for %s result kerr: %d", ied->entry_dn, kerr);
     if (kerr) {
         goto done;
     }
@@ -1119,9 +1133,38 @@ krb5_error_code ipadb_get_pac(krb5_context kcontext,
         goto done;
     }
 
+    {
+        krb5_boolean is_trust_krbtgt;
+        is_trust_krbtgt = strstr(ied->entry_dn, ",cn=ad,cn=trusts,") != NULL;
+
+        if (is_trust_krbtgt) {
+            char *sentry_dn = strchr(ied->entry_dn, ',');
+            if (sentry_dn != NULL) {
+                /* skipped "krbprincipalname=krbtgt/SOME-REALM@AT-REALM," */
+                sentry_dn++;
+                kerr = ipadb_deref_search(ipactx, sentry_dn, LDAP_SCOPE_BASE,
+                                        "(objectclass=*)", user_pac_attrs,
+                                        deref_search_attrs, memberof_pac_attrs,
+                                        &sresults);
+                krb5_klog_syslog(LOG_ERR, "ipadb_get_pac[sentry]: deref_search for %s result kerr: %d", sentry_dn, kerr);
+                if (kerr) {
+                    goto done;
+                }
+
+                sentry = ldap_first_entry(ipactx->lcontext, sresults);
+                krb5_klog_syslog(LOG_ERR, "ipadb_get_pac: first_entry result sentry: %p", sentry);
+                if (!lentry) {
+                    kerr = ENOENT;
+                    goto done;
+                }
+
+            }
+        }
+    }
+
     /* == Fill Info3 == */
-    kerr = ipadb_fill_info3(ipactx, lentry, flags, tmpctx, authtime,
-                            &pac_info.logon_info.info->info3);
+    kerr = ipadb_fill_info3(ipactx, sentry ? sentry : lentry, sentry ? lentry : NULL,
+                            flags, tmpctx, authtime, &pac_info.logon_info.info->info3);
     krb5_klog_syslog(LOG_ERR, "ipadb_get_pac: fill_info3 result kerr: %d", kerr);
     if (kerr) {
         goto done;
@@ -1257,6 +1300,9 @@ krb5_error_code ipadb_get_pac(krb5_context kcontext,
 done:
     krb5_klog_syslog(LOG_ERR, "ipadb_get_pac: kerr: %d", kerr);
     ldap_msgfree(results);
+    if (sresults != NULL) {
+        ldap_msgfree(sresults);
+    }
     talloc_free(tmpctx);
     return kerr;
 }
