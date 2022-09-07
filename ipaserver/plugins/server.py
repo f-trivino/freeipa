@@ -9,7 +9,9 @@ import logging
 import dbus
 import dbus.mainloop.glib
 import ldap
+import uuid
 import time
+import six
 
 from ipalib import api, crud, errors, messages
 from ipalib import Int, Flag, Str, StrEnum, DNSNameParam
@@ -20,10 +22,11 @@ from .baseldap import (
     LDAPDelete,
     LDAPObject,
     LDAPUpdate,
+    pkey_to_value,
 )
 from ipalib.request import context
 from ipalib import _, ngettext
-from ipalib import output
+from ipalib import output, Method
 from ipaplatform import services
 from ipapython.dn import DN
 from ipapython.dnsutil import DNSName
@@ -32,6 +35,10 @@ from ipaserver.servroles import ENABLED, HIDDEN
 from ipaserver.install import bindinstance, dnskeysyncinstance
 from ipaserver.install.service import hide_services, enable_services
 from ipaserver.plugins.privilege import principal_has_privilege
+
+if six.PY3:
+    unicode = str
+
 
 __doc__ = _("""
 IPA servers
@@ -50,6 +57,10 @@ EXAMPLES:
 logger = logging.getLogger(__name__)
 
 register = Registry()
+
+REBUILD_TASK_CONTAINER = DN(('cn', 'Schema compatibility refresh task'),
+                            ('cn', 'tasks'),
+                            ('cn', 'config'))
 
 
 @register()
@@ -1041,3 +1052,64 @@ class server_state(crud.PKQuery):
             'value': fqdn,
             'result': True,
         }
+
+
+@register()
+class server_compat_tree_refresh(Method):
+    __doc__ = _("Refresh Schema Compatibility Tree.")
+
+    takes_options = (
+        Flag(
+            'no_wait?',
+            default=False,
+            label=_('No wait'),
+            doc=_("Don't wait for refreshing schema compatibility tree"),
+        ),
+    )
+
+    has_output = output.standard_entry
+
+    def execute(self, *keys, **options):
+        ldap = self.api.Backend.ldap2
+        cn = str(uuid.uuid4())
+
+        task_dn = DN(('cn', cn), REBUILD_TASK_CONTAINER)
+
+        entry = ldap.make_entry(
+            task_dn,
+            objectclass=['top', 'extensibleObject'],
+            cn=[cn],
+            basedn=[api.env.basedn],
+            scope=['sub'],
+            ttl=[3600])
+        ldap.add_entry(entry)
+
+        summary = _('Schema compatibility tree rebuild task started')
+        result = {'dn': task_dn}
+
+        if not options.get('no_wait'):
+            summary = _('Schema compatibility tree rebuild task completed')
+            result = {}
+            start_time = time.time()
+
+            while True:
+                try:
+                    task = ldap.get_entry(task_dn)
+                except errors.NotFound:
+                    break
+
+                if 'nstaskexitcode' in task:
+                    if str(task.single_value['nstaskexitcode']) == '0':
+                        summary=task.single_value['nstaskstatus']
+                        break
+                    raise errors.DatabaseError(
+                        desc=task.single_value['nstaskstatus'],
+                        info=_("Task DN = '%s'" % task_dn))
+                time.sleep(1)
+                if time.time() > (start_time + 60):
+                   raise errors.TaskTimeout(task=_('Compat'), task_dn=task_dn)
+
+        return dict(
+            result=result,
+            summary=unicode(summary),
+            value=pkey_to_value(None, options))
