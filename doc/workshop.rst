@@ -18,6 +18,7 @@ FreeIPA workshop
    workshop/10-ssh-key-management.rst
    workshop/11-kerberos-ticket-policy.rst
    workshop/12-external-idp-support.rst
+   workshop/13-managing-subids.rst
 
 .. toctree::
    :includehidden:
