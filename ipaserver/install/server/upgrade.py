@@ -1524,8 +1524,10 @@ def upgrade_bind(fstore):
             api.env.host
         )
         bind.ip_addresses = ip_addresses
-        bind.setup_resolv_conf()
-        logger.info("Updated systemd-resolved configuration")
+        # FTRIVINO
+        # bind.setup_resolv_conf()
+        bind.setup_resolv_unbound_conf()
+        logger.info("Updated unbound configuration")
 
     if bind.is_configured() and not bind.is_running():
         # some upgrade steps may require bind running

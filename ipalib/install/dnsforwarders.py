@@ -34,6 +34,25 @@ IFINDEX_GLOBAL = 0
 IFINDEX_LOOPBACK = 1
 
 
+# FTRIVINO
+def detect_unbound_resolv_conf():
+    """Detect if /etc/resolv.conf is managed by unbound
+
+    See man(5) NetworkManager.conf
+    """
+    return True
+    try:
+        dest = os.readlink(paths.RESOLV_CONF)
+    except OSError:
+        # not a link
+        return False
+    # convert path relative to /etc/resolv.conf to abs path
+    dest = os.path.normpath(
+        os.path.join(os.path.dirname(paths.RESOLV_CONF), dest)
+    )
+    return dest in _SYSTEMD_RESOLV_CONF
+
+
 def detect_resolve1_resolv_conf():
     """Detect if /etc/resolv.conf is managed by systemd-resolved
 

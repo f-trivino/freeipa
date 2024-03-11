@@ -775,7 +775,8 @@ class BindInstance(service.Service):
         self.step("configuring named to start on boot", self.switch_service)
         self.step(
             "changing resolv.conf to point to ourselves",
-            self.setup_resolv_conf
+            # FTRIVINO
+            self.setup_resolv_unbound_conf
         )
         self.start_creation()
 
@@ -1154,6 +1155,32 @@ class BindInstance(service.Service):
             # python DNS might have global resolver cached in this variable
             # we have to re-initialize it because resolv.conf has changed
             dnsutil.reset_default_resolver()
+
+
+    # FTRIVINO
+    def setup_resolv_unbound_conf(self):
+        searchdomains = [self.domain]
+        nameservers = set()
+        unbound_enabled = dnsforwarders.detect_unbound_resolv_conf()
+
+        for ip_address in self.ip_addresses:
+            if ip_address.version == 4:
+                nameservers.add("127.0.0.1")
+            elif ip_address.version == 6:
+                nameservers.add("::1")
+
+        try:
+            tasks.configure_unbound_dns_resolver(
+                sorted(nameservers), searchdomains,
+                unbound_enabled=unbound_enabled, fstore=self.fstore
+            )
+        except IOError as e:
+            logger.error('Could not update DNS config: %s', e)
+        else:
+            # python DNS might have global resolver cached in this variable
+            # we have to re-initialize it because resolv.conf has changed
+            dnsutil.reset_default_resolver()
+
 
     def __generate_rndc_key(self):
         installutils.check_entropy()

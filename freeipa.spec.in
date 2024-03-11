@@ -609,6 +609,9 @@ If you are installing an IPA server, you need to install this package.
 Summary: IPA integrated DNS server with support for automatic DNSSEC signing
 BuildArch: noarch
 Requires: %{name}-server = %{version}-%{release}
+# FTRIVINO eDNS
+Requires: unbound
+Requires: unbound-utils
 Requires: bind-dyndb-ldap >= 11.2-2
 Requires: bind >= %{bind_version}
 Requires: bind-utils >= %{bind_version}

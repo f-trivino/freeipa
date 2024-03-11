@@ -409,6 +409,8 @@ class BasePathNamespace:
     SYSTEMD_RESOLVED_IPA_CONF = '/etc/systemd/resolved.conf.d/zzz-ipa.conf'
     SYSTEMD_RESOLVED_CONF = '/etc/systemd/resolved.conf'
     SYSTEMD_RESOLVED_CONF_DIR = '/etc/systemd/resolved.conf.d'
+    UNBOUND_TLS_CONF = '/etc/unbound/conf.d/unbound.tls.conf'
+    UNBOUND_CONF_DIR = '/etc/unbound/conf.d/'
     IPA_CUSTODIA_CONF_DIR = '/etc/ipa/custodia'
     IPA_CUSTODIA_CONF = '/etc/ipa/custodia/custodia.conf'
     IPA_CUSTODIA_KEYS = '/etc/ipa/custodia/server.keys'
