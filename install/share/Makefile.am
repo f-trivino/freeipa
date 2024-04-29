@@ -108,6 +108,7 @@ dist_app_DATA =				\
 	pki-acme-engine.conf.template	\
 	pki-acme-issuer.conf.template	\
 	pki-acme-realm.conf.template	\
+	unbound.conf.template \
 	ldbm-tuning.ldif		\
 	$(NULL)
 
