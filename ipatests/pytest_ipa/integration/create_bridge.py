@@ -16,10 +16,6 @@ def setup_scim_server(host, version="main"):
     url = "https://github.com/freeipa/ipa-tuura"
     host.run_command(["git", "clone", "-b", f"{version}", f"{url}", f"{dir}"])
 
-    # Prepare SSSD config
-    host.run_command(["python", "./prepare_sssd.py"],
-                     cwd=f"{dir}/src/install")
-
     # Get keytab for scim bridge service
     master = host.domain.hosts_by_role("master")[0].hostname
     princ = f"admin@{host.domain.realm}"
@@ -36,7 +32,7 @@ def setup_scim_server(host, version="main"):
     host.run_command(["pip", "install", "-r", f"{django_reqs}"])
 
     # Prepare models and database
-    host.run_command(["python", "manage.py", "makemigrations", "scim"],
+    host.run_command(["python", "manage.py", "makemigrations"],
                      cwd=f"{dir}/src/ipa-tuura")
     host.run_command(["python", "manage.py", "migrate"],
                      cwd=f"{dir}/src/ipa-tuura")
@@ -56,7 +52,8 @@ def setup_scim_server(host, version="main"):
 
     # Create django admin
     host.run_command(["python", "manage.py", "createsuperuser",
-                      "--scim_username", "scim", "--noinput"],
+                      "--scim_username", "scim",
+                      "--noinput", "--email admin@ipatuura.test"],
                      cwd=f"{dir}/src/ipa-tuura")
 
     # Open allowed hosts to any for testing
