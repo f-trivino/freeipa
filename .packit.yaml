@@ -1,0 +1,28 @@
+# we have the specfile in the root of our repository
+specfile_path: tuned.spec
+# when doing an update in Fedora, we want to copy the spec file and the config file
+synced_files:
+  - tuned.spec
+  - .packit.yaml
+upstream_project_name: tuned
+downstream_package_name: tuned
+jobs:
+- job: copr_build
+  trigger: pull_request
+  metadata:
+    targets:
+      - fedora-rawhide-x86_64
+      - fedora-29-x86_64
+      - fedora-30-x86_64
+      - fedora-31-x86_64
+      - epel-8-x86_64
+
+- job: tests
+  trigger: pull_request
+  metadata:
+    targets:
+    - fedora-29-x86_64
+    - fedora-30-x86_64
+    - fedora-31-x86_64
+    - fedora-rawhide-x86_64
+    - epel-8-x86_64
